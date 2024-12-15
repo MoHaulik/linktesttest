@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Open on Quest</title>
+    <!-- Prevent caching so that returning to the site refreshes -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+            overflow: hidden;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            -webkit-user-drag: none;
+        }
+
+        /* Dynamic sky canvas and clouds */
+        canvas {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(#B7B0E3, #FFD3D6);
+            z-index: 1;
+        }
+
+        .sky {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        .clouds {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        @keyframes anim {
+          from { transform: translateX(200%); }
+          to { transform: translateX(-200%); }
+        }
+
+        @keyframes anime {
+          from { transform: translateX(0); }
+          to { transform: translateX(-200%); }
+        }
+
+        .c1, .c2 {
+            width: 800px;
+            height: 700px;
+            position: absolute;
+            background: transparent url("https://s3-us-west-2.amazonaws.com/s.cdpn.io/131045/clouds.png") 0 0 no-repeat;
+            background-size: 100%;
+            /* Lowering z-index so the input container can be above clouds */
+            z-index: 10;
+        }
+
+        .c1.one, .c2.one {
+          top: -260px; left: 0px;
+        }
+        .c1.two, .c2.two {
+          top: -200px; left: 100px;
+        }
+        .c1.three, .c2.three {
+          top: -240px; right: 100px;
+        }
+        .c1.four, .c2.four {
+          top: -180px; right: 0px;
+        }
+
+        @media (max-width: 1023px) {
+          .c2.one {left: -80px;}
+          .c2.two {left: -120px;}
+          .c2.three {right: 220px;}
+          .c2.four {right: 220px;}
+        }
+
+        .c1 {
+          animation: anime 1000s linear infinite forwards;
+        }
+
+        .c2 {
+          transform: translateX(200%);
+          animation: anim 1000s linear infinite forwards;
+        }
+
+        /* Input and button container */
+        .input-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 400px;
+            z-index: 1000; /* On top of everything */
+        }
+
+        .drop-area {
+            width: 100%;
+            height: 60px;
+            border-radius: 30px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            line-height: 60px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 3px 1px hsl(222deg 50% 20% / 50%),
+                inset 0 -10px 20px -10px hsla(180deg, 10%, 90%, 95%);
+            margin-bottom: 20px;
+            cursor: text;
+            transition: all 1.33s ease;
+            isolation: isolate;
+        }
+
+        .drop-area:focus-within,
+        .drop-area.dragover {
+            transform: scale(1.03);
+            box-shadow: 0 4px 8px -2px hsl(222deg 50% 20% / 50%),
+                inset 0 0 0 transparent;
+            transition-duration: 0.665s;
+        }
+
+        .drop-area input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            outline: none;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            font-family: inherit;
+        }
+
+        .suggestions {
+            position: absolute;
+            top: 110px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            display: none;
+            z-index: 9999;
+        }
+
+        .suggestions.visible {
+            display: block;
+        }
+
+        .suggestions div {
+            padding: 10px;
+            font-size: 16px;
+            color: black;
+            cursor: pointer;
+        }
+
+        .suggestions div:hover {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .styled-button {
+            position: relative;
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: none;
+            border-radius: 30px;
+            font-size: 18px;
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 1.33s ease;
+            isolation: isolate;
+            box-shadow: 0 2px 3px 1px hsl(222deg 50% 20% / 50%),
+                inset 0 -10px 20px -10px hsla(180deg, 10%, 90%, 95%);
+            transform: scale(1);
+        }
+
+        .styled-button:hover:not(:active),
+        .styled-button.active {
+            transition-duration: 0.665s;
+            transform: scale(1.2);
+            box-shadow: 0 4px 8px -2px hsl(222deg 50% 20% / 50%),
+                inset 0 0 0 transparent;
+        }
+
+        .styled-button:active {
+            transform: scale(1.1);
+            transition-duration: 0.665s;
+        }
+
+        .styled-button .shimmer {
+            position: absolute;
+            inset: -40px;
+            border-radius: inherit;
+            mask-image: conic-gradient(
+                from 0deg,
+                transparent 0%,
+                transparent 10%,
+                black 36%,
+                black 45%,
+                transparent 50%,
+                transparent 60%,
+                black 85%,
+                black 95%,
+                transparent 100%
+            );
+            mask-size: cover;
+            mix-blend-mode: plus-lighter;
+            animation: shimmer 1s linear infinite both;
+        }
+
+        .styled-button .shimmer::before,
+        .styled-button .shimmer::after {
+            transition: all 0.5s ease;
+            opacity: 0;
+            content: "";
+            border-radius: inherit;
+            position: absolute;
+            mix-blend-mode: color;
+            inset: 40px;
+            pointer-events: none;
+        }
+
+        .styled-button .shimmer::before {
+            box-shadow: 0 0 3px 2px hsl(222deg 20% 95%),
+                0 0 7px 4px hsl(222deg 20% 80%),
+                0 0 13px 4px hsl(222deg 50% 70%),
+                0 0 25px 5px hsl(222deg 100% 70%);
+            z-index: -1;
+        }
+
+        .styled-button .shimmer::after {
+            box-shadow: inset 0 0 0 1px hsl(222deg 70% 95%),
+                inset 0 0 2px 1px hsl(222deg 100% 80%),
+                inset 0 0 5px 2px hsl(222deg 100% 70%);
+            z-index: 2;
+        }
+
+        .styled-button .text {
+            color: white;
+        }
+
+        @keyframes shimmer {
+            0% { --shimmer: 0deg; }
+            100% { --shimmer: 360deg; }
+        }
+
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/UAParser.js/1.0.2/ua-parser.min.js"></script>
+</head>
+<body>
+    <!-- Dynamic sky elements -->
+    <canvas id="canv"></canvas>
+    <div class="sky">
+        <div class="clouds">
+            <div class="c1 one"></div>
+            <div class="c1 two"></div>
+            <div class="c1 three"></div>
+            <div class="c1 four"></div>
+            <div class="c2 one"></div>
+            <div class="c2 two"></div>
+            <div class="c2 three"></div>
+            <div class="c2 four"></div>
+        </div>
+    </div>
+
+    <!-- Input and button UI -->
+    <div class="input-container">
+        <div class="drop-area" id="dropArea">
+            <input type="text" id="urlInput" placeholder="Type or drop a URL" autocomplete="off" />
+        </div>
+        <div class="suggestions" id="suggestions"></div>
+        <button id="openOnQuestButton" class="styled-button">
+            <span class="text">Open on Quest</span>
+            <div class="shimmer"></div>
+        </button>
+    </div>
+
+    <script>
+        // Managing recent URLs in localStorage
+        const RECENT_URLS_KEY = 'recentUrls';
+        function loadRecentUrls() {
+            let urls = localStorage.getItem(RECENT_URLS_KEY);
+            if (urls) {
+                try {
+                    urls = JSON.parse(urls);
+                } catch (e) {
+                    urls = [];
+                }
+            } else {
+                urls = [];
+            }
+            return urls;
+        }
+
+        function saveRecentUrl(newUrl) {
+            let urls = loadRecentUrls();
+            // Remove if already exists to re-insert at the front
+            urls = urls.filter(u => u !== newUrl);
+            // Add to front
+            urls.unshift(newUrl);
+            // Keep only last 3
+            if (urls.length > 3) {
+                urls = urls.slice(0, 3);
+            }
+            localStorage.setItem(RECENT_URLS_KEY, JSON.stringify(urls));
+        }
+
+        function sendLinkToQuest(linkUrl) {
+            let finalUrl = linkUrl.trim();
+            // Auto-add https:// if missing
+            if (!finalUrl.startsWith('https://')) {
+                finalUrl = 'https://' + finalUrl.replace(/^https?:\/\//, '');
+            }
+            const encodedUrl = encodeURIComponent(finalUrl);
+            const webLaunchEndpoint = `https://www.oculus.com/open_url/?url=${encodedUrl}`;
+            saveRecentUrl(finalUrl);
+            window.location.href = webLaunchEndpoint;
+        }
+
+        function isQuestHeadset() {
+            const parser = new UAParser();
+            const result = parser.getResult();
+            const browserName = result.browser.name || '';
+            const deviceModel = result.device.model || '';
+            const isOculusBrowser = browserName.includes('OculusBrowser');
+            const isQuestDevice = deviceModel.includes('Quest');
+            return isOculusBrowser || isQuestDevice;
+        }
+
+        function showSuggestions(filteredUrls) {
+            const suggestionsBox = document.getElementById('suggestions');
+            suggestionsBox.innerHTML = '';
+            if (filteredUrls.length > 0) {
+                filteredUrls.forEach(url => {
+                    const div = document.createElement('div');
+                    // Show without protocol in suggestions
+                    div.textContent = url.replace(/^https?:\/\//, '');
+                    div.addEventListener('click', () => {
+                        document.getElementById('urlInput').value = url.replace(/^https?:\/\//, '');
+                        suggestionsBox.classList.remove('visible');
+                    });
+                    suggestionsBox.appendChild(div);
+                });
+                suggestionsBox.classList.add('visible');
+            } else {
+                suggestionsBox.classList.remove('visible');
+            }
+        }
+
+        function initializePage() {
+            const dropArea = document.getElementById('dropArea');
+            const urlInput = document.getElementById('urlInput');
+            const openOnQuestButton = document.getElementById('openOnQuestButton');
+            const suggestionsBox = document.getElementById('suggestions');
+
+            // Handle dragging over the drop area
+            dropArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropArea.classList.add('dragover');
+            });
+            dropArea.addEventListener('dragleave', function() {
+                dropArea.classList.remove('dragover');
+            });
+            dropArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropArea.classList.remove('dragover');
+                const data = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                if (data) {
+                    urlInput.value = data.replace(/^https?:\/\//, '');
+                }
+            });
+
+            urlInput.addEventListener('input', () => {
+                const inputVal = urlInput.value.trim().toLowerCase();
+                const recentUrls = loadRecentUrls();
+                const filtered = recentUrls.filter(u => u.toLowerCase().includes(inputVal));
+                showSuggestions(filtered);
+            });
+
+            // Hide suggestions on blur
+            urlInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    suggestionsBox.classList.remove('visible');
+                }, 200);
+            });
+
+            openOnQuestButton.addEventListener('click', function() {
+                const url = urlInput.value.trim();
+                if (url) {
+                    sendLinkToQuest(url);
+                } else {
+                    alert('Please enter or drop a valid URL.');
+                }
+            });
+
+            if (isQuestHeadset()) {
+                console.log('Page accessed from Meta Quest headset.');
+            }
+        }
+
+        // Force reload if page was restored from cache
+        window.onpageshow = function(event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePage();
+            initBirds(); // Initialize the birds after the DOM is ready
+        });
+
+        /***************** Bird Animation Code *******************/
+        var Bird = {
+          def: function(n, m, s) {
+            if (m) this.e(n.prototype, m);
+            if (s) this.e(n, s);
+            return n;
+          },
+          e: function(o, p) {
+            for (prop in p) o[prop] = p[prop];
+            return o;
+          },
+          v: [
+            [5, 0, 0],
+            [-5, -2, 1],
+            [-5, 0, 0],
+            [-5, -2, -1],
+            [0, 2, -6],
+            [0, 2, 6],
+            [2, 0, 0],
+            [-3, 0, 0]
+          ],
+          beak: [
+            [0, 1, 2],
+            [4, 7, 6],
+            [5, 6, 7]
+          ],
+          L: null,
+          V: {
+            x: 0,
+            y: 0,
+            z: 5000
+          }
+        };
+
+        Bird.obj = Bird.def(
+          function() {
+            this.vtr = new Bird.Vtr();
+            this.width = 600;
+            this.height = 600;
+            this.depth = 300;
+            this.area = 200;
+            this.msp = 4;
+            this.mfrc = 0.1;
+            this.coll = false;
+            this.pos = new Bird.Vtr();
+            this.vel = new Bird.Vtr();
+            this.accel = new Bird.Vtr();
+          }, {
+            _coll: function(value) { this.coll = value; },
+            param: function(w, h, d) {
+              this.width = w;
+              this.height = h;
+              this.depth = d;
+            },
+            run: function(b) {
+              if (this.coll) {
+                this.checkBounds();
+              }
+              if (Math.random() > 0.5) {
+                this.fly(b);
+              }
+              this.move();
+            },
+            checkBounds: function() {
+              this.repBound(-this.width, this.pos.y, this.pos.z);
+              this.repBound(this.width, this.pos.y, this.pos.z);
+              this.repBound(this.pos.x, -this.height, this.pos.z);
+              this.repBound(this.pos.x, this.height, this.pos.z);
+              this.repBound(this.pos.x, this.pos.y, -this.depth);
+              this.repBound(this.pos.x, this.pos.y, this.depth);
+            },
+            repBound: function(x, y, z) {
+              this.vtr.set(x, y, z);
+              this.vtr = this.detect(this.vtr);
+              this.vtr.scale(5);
+              this.accel.add(this.vtr);
+            },
+            fly: function(b) {
+              if (this.ept) {
+                this.accel.add(this.meet(this.ept, 0.005));
+              }
+              this.accel.add(this.line(b));
+              this.accel.add(this.togeth(b));
+              this.accel.add(this.apart(b));
+            },
+            move: function() {
+              this.vel.add(this.accel);
+              var l = this.vel.len();
+              if (l > this.msp) {
+                this.vel.lowscale(l / this.msp);
+              }
+              this.pos.add(this.vel);
+              this.accel.set(0, 0, 0);
+            },
+            detect: function(pt) {
+              var dir = new Bird.Vtr();
+              dir.copy(this.pos);
+              dir.sub(pt);
+              dir.scale(1 / this.pos.dsq(pt));
+              return dir;
+            },
+            meet: function(pt, amt) {
+              var dir = new Bird.Vtr();
+              dir.subv(pt, this.pos);
+              dir.scale(amt);
+              return dir;
+            },
+            line: function(b) {
+              var totvel = new Bird.Vtr(), cnt = 0;
+              for (var i = 0, il = b.length; i < il; i++) {
+                if (Math.random() > 0.6) continue;
+                var _b = b[i];
+                var dist = _b.pos.dst(this.pos);
+                if (dist > 0 && dist <= this.area) {
+                  totvel.add(_b.vel);
+                  cnt++;
+                }
+              }
+              if (cnt > 0) {
+                totvel.lowscale(cnt);
+                var v = totvel.len();
+                if (v > this.mfrc) {
+                  totvel.lowscale(v / this.mfrc);
+                }
+              }
+              return totvel;
+            },
+            togeth: function(b) {
+              var plus = new Bird.Vtr(), dir = new Bird.Vtr(), cnt = 0;
+              for (var i = 0, il = b.length; i < il; i++) {
+                if (Math.random() > 0.6) continue;
+                var _b = b[i];
+                var dist = _b.pos.dst(this.pos);
+                if (dist > 0 && dist <= this.area) {
+                  plus.add(_b.pos);
+                  cnt++;
+                }
+              }
+              if (cnt > 0) {
+                plus.lowscale(cnt);
+              }
+              dir.subv(plus, this.pos);
+              var l = dir.len();
+              if (l > this.mfrc) {
+                dir.lowscale(l / this.mfrc);
+              }
+              return dir;
+            },
+            apart: function(b) {
+              var plus = new Bird.Vtr(), rep = new Bird.Vtr();
+              for (var i = 0, il = b.length; i < il; i++) {
+                if (Math.random() > 0.6) continue;
+                var _b = b[i];
+                var dist = _b.pos.dst(this.pos);
+                if (dist > 0 && dist <= this.area) {
+                  rep.subv(this.pos, _b.pos);
+                  rep.level();
+                  rep.lowscale(dist);
+                  plus.add(rep);
+                }
+              }
+              return plus;
+            }
+          }
+        );
+
+        Bird.Build = Bird.def(
+          function() {
+            this.base = 0; this.left = 1; this.right = 2;
+            this.pos = new Bird.Vtr();
+            this.rot = new Bird.Vtr();
+            this.bbase = this.tri(this.base);
+            this.leftwing = this.tri(this.left);
+            this.rightwing = this.tri(this.right);
+          }, {
+            matrix: function() {
+              this.bbase.vtx();
+              this.leftwing.vtx();
+              this.rightwing.vtx();
+              this.leftwing.wingY(this.wY);
+              this.rightwing.wingY(this.wY);
+              this.bbase.rotY(this.rot.y);
+              this.bbase.rotZ(this.rot.z);
+              this.leftwing.rotY(this.rot.y);
+              this.leftwing.rotZ(this.rot.z);
+              this.rightwing.rotY(this.rot.y);
+              this.rightwing.rotZ(this.rot.z);
+              this.bbase.trans(this.pos);
+              this.leftwing.trans(this.pos);
+              this.rightwing.trans(this.pos);
+            },
+            draw: function() {
+              this.bbase.draw();
+              this.leftwing.draw();
+              this.rightwing.draw();
+            },
+            tri: function(i) {
+              var v, v1, v2, v3;
+              v = Bird.v[Bird.beak[i][0]];
+              v1 = new Bird.Vtr(v[0], v[1], v[2]);
+              v = Bird.v[Bird.beak[i][1]];
+              v2 = new Bird.Vtr(v[0], v[1], v[2]);
+              v = Bird.v[Bird.beak[i][2]];
+              v3 = new Bird.Vtr(v[0], v[1], v[2]);
+              return new Bird.Tri(v1, v2, v3);
+            },
+            zpos: function() {
+              var z1 = this.bbase._z();
+              var z2 = this.leftwing._z();
+              var z3 = this.rightwing._z();
+              return Math.min(z1, z2, z3);
+            },
+            wing: function(y) {
+              this.wY = y;
+            }
+          }
+        );
+
+        Bird.Tri = Bird.def(
+          function(p1, p2, p3) {
+            this.mainv = [p1.copy(), p2.copy(), p3.copy()];
+            this.Vtxs = [p1.copy(), p2.copy(), p3.copy()];
+            this.bv = new Bird.Vtr(0.5, 0.5, 0.8);
+          }, {
+            draw: function() {
+              var v1 = [this.Vtxs[0].Pt().x, this.Vtxs[0].Pt().y];
+              var v2 = [this.Vtxs[1].Pt().x, this.Vtxs[1].Pt().y];
+              var v3 = [this.Vtxs[2].Pt().x, this.Vtxs[2].Pt().y];
+              var col = this.col();
+              Bird.$.fillStyle = col;
+              Bird.$.strokeStyle = col;
+              Bird.$.lineWidth = 0.1;
+              Bird.$.beginPath();
+              Bird.$.moveTo(v1[0], v1[1]);
+              Bird.$.lineTo(v2[0], v2[1]);
+              Bird.$.lineTo(v3[0], v3[1]);
+              Bird.$.lineTo(v1[0], v1[1]);
+              Bird.$.closePath();
+              Bird.$.fill();
+              Bird.$.stroke();
+            },
+            rotX: function(a) { this.Vtxs.forEach(e => Bird.Matrix.rotX(e, a)); },
+            rotY: function(a) { this.Vtxs.forEach(e => Bird.Matrix.rotY(e, a)); },
+            rotZ: function(a) { this.Vtxs.forEach(e => Bird.Matrix.rotZ(e, a)); },
+            trans: function(s) { this.Vtxs.forEach(e => Bird.Matrix.trans(e, [s.x, s.y, s.z])); },
+            vtx: function() {
+              for (var i = 0; i < 3; i++) {
+                var x = this.mainv[i].x;
+                var y = this.mainv[i].y;
+                var z = this.mainv[i].z;
+                this.Vtxs[i].x = x;
+                this.Vtxs[i].y = y;
+                this.Vtxs[i].z = z;
+              }
+            },
+            wingY: function(y) { this.Vtxs[0].y = y; },
+            _z: function() {
+              return Math.min(this.Vtxs[0].z, this.Vtxs[1].z, this.Vtxs[2].z);
+            },
+            col: function() {
+              // Simple shading to keep performance better
+              var shade = 200 + Math.floor(Math.random()*55);
+              return 'rgb('+shade+','+shade+','+(shade+20)+')';
+            },
+            norm: function() {
+              var v1 = this.Vtxs[0].copy();
+              var v2 = this.Vtxs[1].copy();
+              var v3 = this.Vtxs[2].copy();
+              v3.sub(v2);
+              v1.sub(v3);
+              v3.cross(v1);
+              v3.level();
+              return v3;
+            }
+          }
+        );
+
+        Bird.Vtr = Bird.def(
+          function(x, y, z) {
+            this.x = x || 0;
+            this.y = y || 0;
+            this.z = z || 0;
+            this.fl = 1000;
+          }, {
+            Pt: function() {
+              var zsc = this.fl + this.z;
+              var scale = this.fl / zsc;
+              var x = this.x * scale;
+              var y = this.y * scale;
+              return { x: x, y: y, scale: scale };
+            },
+            set: function(x, y, z) {
+              this.x = x; this.y = y; this.z = z;
+              return this;
+            },
+            len: function() {
+              return Math.sqrt(this.x*this.x + this.y*this.y + this.z*this.z);
+            },
+            add: function(v) {
+              this.x += v.x; this.y += v.y; this.z += v.z;
+              return this;
+            },
+            sub: function(v) {
+              this.x -= v.x; this.y -= v.y; this.z -= v.z;
+              return this;
+            },
+            subv: function(a, b) {
+              this.x = a.x - b.x; this.y = a.y - b.y; this.z = a.z - b.z;
+              return this;
+            },
+            scale: function(u) {
+              this.x *= u; this.y *= u; this.z *= u;
+              return this;
+            },
+            lowscale: function(u) {
+              if (u !== 0) {
+                var inv = 1/u;
+                this.x *= inv; this.y *= inv; this.z *= inv;
+              } else {
+                this.x = this.y = this.z = 0;
+              }
+              return this;
+            },
+            copy: function() {
+              return new Bird.Vtr(this.x, this.y, this.z);
+            },
+            dst: function(v) {
+              return Math.sqrt(this.dsq(v));
+            },
+            dsq: function(v) {
+              var dx = this.x - v.x;
+              var dy = this.y - v.y;
+              var dz = this.z - v.z;
+              return dx*dx + dy*dy + dz*dz;
+            },
+            cross: function(v) {
+              var x = this.x, y = this.y, z = this.z;
+              this.x = y*v.z - z*v.y;
+              this.y = z*v.x - x*v.z;
+              this.z = x*v.y - y*v.x;
+              return this;
+            },
+            p: function(v) {
+              return this.x*v.x + this.y*v.y + this.z*v.z;
+            },
+            level: function() {
+              return this.lowscale(this.len());
+            }
+          }
+        );
+
+        Bird.Matrix = {
+          rotX: function(pt, angX) {
+            var pos = [pt.x, pt.y, pt.z];
+            var asin = Math.sin(angX);
+            var acos = Math.cos(angX);
+            var xrot = [[1, 0, 0],[0, acos, asin],[0, -asin, acos]];
+            var calc = this.mm(pos, xrot);
+            pt.x = calc[0]; pt.y = calc[1]; pt.z = calc[2];
+          },
+          rotY: function(pt, angY) {
+            var pos = [pt.x, pt.y, pt.z];
+            var asin = Math.sin(angY);
+            var acos = Math.cos(angY);
+            var yrot = [[acos, 0, asin],[0, 1, 0],[-asin, 0, acos]];
+            var calc = this.mm(pos, yrot);
+            pt.x = calc[0]; pt.y = calc[1]; pt.z = calc[2];
+          },
+          rotZ: function(pt, angZ) {
+            var pos = [pt.x, pt.y, pt.z];
+            var asin = Math.sin(angZ);
+            var acos = Math.cos(angZ);
+            var zrot = [[acos, asin, 0],[-asin, acos, 0],[0,0,1]];
+            var calc = this.mm(pos, zrot);
+            pt.x = calc[0]; pt.y = calc[1]; pt.z = calc[2];
+          },
+          trans: function(pt, s) {
+            pt.x += s[0]; pt.y += s[1]; pt.z += s[2];
+          },
+          mm: function(m1, m2) {
+            var calc = [];
+            calc[0] = m1[0]*m2[0][0] + m1[1]*m2[1][0] + m1[2]*m2[2][0];
+            calc[1] = m1[0]*m2[0][1] + m1[1]*m2[1][1] + m1[2]*m2[2][1];
+            calc[2] = m1[0]*m2[0][2] + m1[1]*m2[1][2] + m1[2]*m2[2][2];
+            return calc;
+          }
+        };
+
+        function initBirds() {
+          var c = document.getElementById('canv');
+          Bird.$ = c.getContext("2d");
+          Bird.canv = { w: c.width = window.innerWidth, h: c.height = window.innerHeight };
+          Bird.L = new Bird.Vtr(0, 2000, 5000);
+          Bird.V = new Bird.Vtr(0, 0, 5000);
+
+          // Reduced bird count for better performance
+          var count = 50;
+          var birds = [];
+          var b = [];
+          for (var i = 0; i < count; i++) {
+            var _b = b[i] = new Bird.obj();
+            _b.pos.x = Math.random()*800 - 400;
+            _b.pos.y = Math.random()*800 - 400;
+            _b.pos.z = Math.random()*800 - 400;
+            _b.vel.x = Math.random()*2 - 1;
+            _b.vel.y = Math.random()*2 - 1;
+            _b.vel.z = Math.random()*2 - 1;
+            _b._coll(true);
+            _b.param(400, 400, 800);
+            var bird = birds[i] = new Bird.Build();
+            bird.phase = Math.floor(Math.random()*62.83);
+            bird.pos = b[i].pos;
+          }
+
+          function runAnim() {
+            requestAnimationFrame(runAnim);
+            draw(birds, b);
+          }
+
+          function draw(birds, b) {
+            Bird.$.setTransform(1, 0, 0, 1, 0, 0);
+            Bird.$.translate(Bird.canv.w/2, Bird.canv.h/2);
+            Bird.$.clearRect(-Bird.canv.w/2, -Bird.canv.h/2, Bird.canv.w, Bird.canv.h);
+            Bird.$.scale(1, -1);
+            var arr = [];
+            b.forEach(function(e, i) {
+              var _b = b[i];
+              _b.run(b);
+              var bird = birds[i];
+              bird.rot.y = Math.atan2(-_b.vel.z, _b.vel.x);
+              var speed = _b.vel.len();
+              bird.rot.z = Math.asin(_b.vel.y / (speed||1));
+              bird.phase = (bird.phase + (Math.max(0, bird.rot.z) + 0.1)) % 62.83;
+              bird.wing(Math.sin(bird.phase)*5);
+              bird.matrix();
+              arr.push({ z: bird.zpos(), o: bird });
+            });
+            arr.sort(function(a, b){return a.z < b.z ? -1 : a.z > b.z ? 1 : 0;});
+            arr.forEach(function(e) { e.o.draw(); });
+          }
+
+          window.addEventListener('resize', function() {
+            if (c.width!==window.innerWidth || c.height!==window.innerHeight) {
+              Bird.canv = { w: c.width = window.innerWidth, h: c.height = window.innerHeight };
+            }
+          });
+
+          runAnim();
+        }
+    </script>
+</body>
+</html>
